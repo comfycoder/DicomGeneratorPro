@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DicomGeneratorPro": {
+      "commandName": "Project",
+      "commandLineArgs": "--config \"C:\\srcDICOM\\DicomGeneratorPro\\DicomGeneratorPro\\Configs\\config.json\""
+    }
+  }
+}

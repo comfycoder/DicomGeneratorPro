@@ -1,0 +1,123 @@
+{
+  "OutputRoot": "C:\\temp\\SyntheticOutput",
+  "Seed": 12345,
+
+  "NumOrganizations": 1,
+  "PatientsPerOrg": {
+    "Min": 3,
+    "Max": 10
+  },
+  "ExamsPerPatient": {
+    "Min": 1,
+    "Max": 3
+  },
+
+  "ModalitiesPerExam": {
+    "Min": 1,
+    "Max": 6
+  },
+  "Modalities": [ "CT", "PT", "MR", "NM", "XA", "CR", "SR" ],
+
+  "DateRangeYears": {
+    "Min": -3,
+    "Max": 0
+  },
+
+  "OrgPrefix": {
+    "PrefixLength": 3,
+    "Alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  },
+  "PatientId": {
+    "Prefix": "PT",
+    "Digits": 8,
+    "StartFrom": 1
+  },
+
+  "Defaults": {
+    "Rows": 128,
+    "Cols": 128,
+    "BitsAllocated": 8,
+    "BitsStored": 8,
+    "PhotometricInterpretation": "MONOCHROME2"
+  },
+
+  "Profiles": {
+    "CT": {
+      "SeriesPerStudy": {
+        "Min": 2,
+        "Max": 3
+      },
+      "StandardStudyFileCounts": [ 128, 256, 512 ],
+      "SeriesDescriptions": [ "CTAC", "CT-Diagnostic" ],
+      "StudyDescriptions": [ "CT Diagnostic", "CTAC" ],
+      "Rows": 512,
+      "Cols": 512
+    },
+    "PT": {
+      "SeriesPerStudy": {
+        "Min": 1,
+        "Max": 2
+      },
+      "StandardStudyFileCounts": [ 64, 96 ],
+      "SeriesDescriptions": [ "PET WB" ],
+      "StudyDescriptions": [ "PET Whole Body" ],
+      "Rows": 64,
+      "Cols": 64
+    },
+    "NM": {
+      "SeriesPerStudy": {
+        "Min": 1,
+        "Max": 2
+      },
+      "StandardStudyFileCounts": [ 32, 64 ],
+      "SeriesDescriptions": [ "NM WB", "Recon" ],
+      "StudyDescriptions": [ "NM Whole Body" ],
+      "Rows": 64,
+      "Cols": 64
+    },
+    "MR": {
+      "SeriesPerStudy": {
+        "Min": 1,
+        "Max": 2
+      },
+      "StandardStudyFileCounts": [ 64, 128 ],
+      "SeriesDescriptions": [ "MR-T1", "MR-T2" ],
+      "StudyDescriptions": [ "MRI Head" ],
+      "Rows": 256,
+      "Cols": 256
+    },
+    "XA": {
+      "SeriesPerStudy": {
+        "Min": 2,
+        "Max": 3
+      },
+      "StandardStudyFileCounts": [ 256, 512 ],
+      "SeriesDescriptions": [ "XA Series" ],
+      "StudyDescriptions": [ "Angiography" ],
+      "Rows": 1024,
+      "Cols": 1024
+    },
+    "CR": {
+      "SeriesPerStudy": {
+        "Min": 1,
+        "Max": 1
+      },
+      "StandardStudyFileCounts": [ 1 ],
+      "SeriesDescriptions": [ "CR Image" ],
+      "StudyDescriptions": [ "CR Radiograph" ],
+      "Rows": 2048,
+      "Cols": 2048
+    },
+    "SR": {
+      "SeriesPerStudy": {
+        "Min": 1,
+        "Max": 1
+      },
+      "StandardStudyFileCounts": [ 1 ],
+      "SeriesDescriptions": [ "SR Content" ],
+      "StudyDescriptions": [ "Structured Report" ],
+      "Rows": 64,
+      "Cols": 64
+    }
+  }
+}
