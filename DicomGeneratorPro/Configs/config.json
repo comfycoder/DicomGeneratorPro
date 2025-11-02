@@ -2,7 +2,10 @@
   "OutputRoot": "C:\\temp\\SyntheticOutput",
   "Seed": 12345,
 
+  // Number of distinct org prefixes to generate (randomized from OrgPrefix settings)
   "NumOrganizations": 1,
+
+  // Population shape
   "PatientsPerOrg": {
     "Min": 3,
     "Max": 10
@@ -12,22 +15,38 @@
     "Max": 3
   },
 
+  // How many modalities per exam (the generator will pick from Modalities below)
   "ModalitiesPerExam": {
     "Min": 1,
     "Max": 6
   },
+
+  // Available modalities to sample from (must align with Profiles keys)
   "Modalities": [ "CT", "PT", "MR", "NM", "XA", "CR", "SR" ],
 
+  // Study date window (years offset from today). e.g., -3..0 = last 3 years
   "DateRangeYears": {
     "Min": -3,
     "Max": 0
   },
 
+  // NEW: Explicit exam pairing weights (percentages). Sums to ~100 (generator can normalize).
+  //  - CtPtPercent: chance an exam is exactly CT+PT
+  //  - CtNmPercent: chance an exam is exactly CT+NM
+  //  - MixedPercent: chance an exam uses a mixed/random combo from ModalitiesPerExam/Modalities
+  "ExamMix": {
+    "CtPtPercent": 70,
+    "CtNmPercent": 10,
+    "MixedPercent": 20
+  },
+
+  // Organization prefix generator
   "OrgPrefix": {
     "PrefixLength": 3,
     "Alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   },
 
+  // Patient ID composition (composite ID: <ORG>-<INITIALS>-<CODE>-<NUMBER>)
   "PatientId": {
     "InitialsLength": 2,
     "InitialsAlphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -35,12 +54,14 @@
     "RandomCodeAlphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
     "RandomNumberDigits": 3,
     "Separator": "-",
+
+    // Legacy fields retained (ignored by current ID generator; safe to keep for compatibility)
     "Prefix": "P",
     "Digits": 6,
     "StartFrom": 1
   },
 
-
+  // Global image defaults (per-profile overrides below)
   "Defaults": {
     "Rows": 128,
     "Cols": 128,
@@ -49,6 +70,7 @@
     "PhotometricInterpretation": "MONOCHROME2"
   },
 
+  // Per-modality generation profiles (series counts, slice counts, names, and optional size overrides)
   "Profiles": {
     "CT": {
       "SeriesPerStudy": {
