@@ -27,11 +27,19 @@
     "PrefixLength": 3,
     "Alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   },
+
   "PatientId": {
-    "Prefix": "PT",
-    "Digits": 8,
+    "InitialsLength": 2,
+    "InitialsAlphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "RandomCodeLength": 6,
+    "RandomCodeAlphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "RandomNumberDigits": 3,
+    "Separator": "-",
+    "Prefix": "P",
+    "Digits": 6,
     "StartFrom": 1
   },
+
 
   "Defaults": {
     "Rows": 128,
