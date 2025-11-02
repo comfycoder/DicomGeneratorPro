@@ -128,8 +128,9 @@ namespace DicomGeneratorPro
                         cols);
 
                     written.Add(fullPath);
+
                     // Optional progress:
-                    Console.WriteLine(fullPath);
+                    // Console.WriteLine(fullPath);
                 }
 
                 Console.WriteLine($"Generated {perSeries[s]} DICOM files at: {seriesDir}");
