@@ -3,12 +3,12 @@
   "Seed": 12345,
 
   // Number of distinct org prefixes to generate (randomized from OrgPrefix settings)
-  "NumOrganizations": 1,
+  "NumOrganizations": 10,
 
   // Population shape
   "PatientsPerOrg": {
     "Min": 3,
-    "Max": 10
+    "Max": 100
   },
   "ExamsPerPatient": {
     "Min": 1,
