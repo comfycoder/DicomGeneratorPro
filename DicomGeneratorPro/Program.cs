@@ -59,11 +59,8 @@ namespace DicomGeneratorPro
 
                 // Generators
                 var orgGen = new OrgPrefixGenerator(rnd, cfg.OrgPrefix);
-
-                // NEW: composite Patient ID generator configuration (Organization + Initials + 6-char code + 3-digit number)
                 var pidGen = new PatientIdGenerator(rnd, cfg.PatientId);
-
-                var generator = new DicomStudyGenerator(cfg, rnd);
+                var examGen = new DicomExamGenerator(cfg, rnd); // NEW
 
                 // ---- Metrics
                 var sw = Stopwatch.StartNew();
@@ -78,7 +75,7 @@ namespace DicomGeneratorPro
                     int patients = cfg.PatientsPerOrg.Sample(rnd);
                     for (int pi = 0; pi < patients; pi++)
                     {
-                        // NEW: pass organization into patient-id builder
+                        // Composite Patient ID & PN
                         var (patientId, patientName) = pidGen.Next(org);
                         patientCount++;
 
@@ -97,23 +94,29 @@ namespace DicomGeneratorPro
                             int k = Math.Max(1, cfg.ModalitiesPerExam.Sample(rnd));
                             var modalities = ChooseModalitiesForExam(cfg, rnd, k);
 
-                            foreach (var modality in modalities)
+                            // Generate ONE exam with multiple studies (one per modality)
+                            var examResult = examGen.GenerateExam(
+                                outputRoot,
+                                org,
+                                patientId,
+                                patientName,
+                                baseDateUtc,
+                                modalities);
+
+                            Console.WriteLine($"[Exam] Org={org} Patient={patientId} Accession={examResult.AccessionNumber} Modalities=[{string.Join(",", modalities)}]");
+
+                            // Metrics aggregation
+                            studyCount += examResult.Studies.Count;
+
+                            foreach (var s in examResult.Studies)
                             {
-                                var result = generator.GenerateStudy(
-                                    outputRoot,
-                                    org,
-                                    patientId,
-                                    patientName,
-                                    modality,
-                                    baseDateUtc);
+                                // Study result now includes Modality explicitly
+                                if (!filesByModality.ContainsKey(s.Modality))
+                                    filesByModality[s.Modality] = 0;
 
-                                studyCount++;
-                                seriesCount += result.SeriesCount;
-                                fileCount += result.FileCount;
-
-                                if (!filesByModality.ContainsKey(modality))
-                                    filesByModality[modality] = 0;
-                                filesByModality[modality] += result.FileCount;
+                                filesByModality[s.Modality] += s.FileCount;
+                                seriesCount += s.SeriesCount;
+                                fileCount += s.FileCount;
                             }
                         }
                     }

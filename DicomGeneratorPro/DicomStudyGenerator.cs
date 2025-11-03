@@ -1,14 +1,17 @@
-﻿using FellowOakDicom;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using FellowOakDicom;
 
 namespace DicomGeneratorPro
 {
     /// <summary>
     /// Generates a single synthetic DICOM study (one or more series, each with N instances)
     /// and writes it to the standard folder layout:
-    ///   <OutputRoot>/Dicom/<Organization>/<PatientId>/<YYYYMMDD_HHMMSS StudyDescription>/<Modality SeriesDescription>/*.dcm
+    ///   <OutputRoot>/Dicom/<Organization>/<PatientId>/<YYYYMMDD_HHMMSS>/<Modality SeriesDescription_Snn_UID6>/*.dcm
     ///
-    /// This version routes ALL instance filenames through an IFileNameProvider (UidAndInstanceFileNameProvider by default)
-    /// to ensure the written file names match the dataset SOPInstanceUID/InstanceNumber.
+    /// Reads AccessionNumber from written DICOM metadata (for realism),
+    /// but does not include it in folder names.
     /// </summary>
     public sealed class DicomStudyGenerator
     {
@@ -23,45 +26,42 @@ namespace DicomGeneratorPro
             _factory = new DicomFactory(cfg);
         }
 
-        public sealed record StudyResult(int SeriesCount, int FileCount, List<string> Files);
+        public sealed record StudyResult(string Modality, int SeriesCount, int FileCount, List<string> Files);
 
-        /// <summary>
-        /// Create a full study beneath the output root for the specified org/patient.
-        /// </summary>
         public StudyResult GenerateStudy(
             string outputRoot,
             string organization,
             string patientId,
             string patientName,
             string modality,
-            DateTime baseDateUtc)
+            DateTime baseDateUtc,
+            string accessionNumber)
         {
             if (string.IsNullOrWhiteSpace(outputRoot)) throw new ArgumentException("outputRoot is required");
             if (string.IsNullOrWhiteSpace(organization)) throw new ArgumentException("organization is required");
             if (string.IsNullOrWhiteSpace(patientId)) throw new ArgumentException("patientId is required");
             if (string.IsNullOrWhiteSpace(modality)) throw new ArgumentException("modality is required");
+            if (string.IsNullOrWhiteSpace(accessionNumber)) throw new ArgumentException("accessionNumber is required");
 
-            // Profile by modality (fallback to empty profile)
+            // Select modality profile
             var profile = _cfg.Profiles != null && _cfg.Profiles.TryGetValue(modality, out var p)
                 ? p
                 : new ModalityProfile();
 
-            // Study description
+            // Pick a study description
             var studyDescList = (profile.StudyDescriptions != null && profile.StudyDescriptions.Count > 0)
                 ? profile.StudyDescriptions
                 : new List<string> { "Diagnostic" };
             var studyDescription = studyDescList[_rnd.Next(studyDescList.Count)];
 
-            // Geometry
+            // Geometry defaults
             int rows = profile.Rows > 0 ? profile.Rows : _cfg.Defaults.Rows;
             int cols = profile.Cols > 0 ? profile.Cols : _cfg.Defaults.Cols;
 
-            // How many series?
+            // Series count and frames per series
             int seriesCount = profile.SeriesPerStudy != null ? profile.SeriesPerStudy.Sample(_rnd) : 1;
             if (seriesCount <= 0) seriesCount = 1;
 
-            // How many files per series?
-            // If the profile lists explicit counts use the first as the standard count; else default to 64.
             int standardCount = (profile.StandardStudyFileCounts != null && profile.StandardStudyFileCounts.Count > 0)
                 ? profile.StandardStudyFileCounts[0]
                 : 64;
@@ -69,34 +69,32 @@ namespace DicomGeneratorPro
             var perSeries = new List<int>(seriesCount);
             for (int i = 0; i < seriesCount; i++) perSeries.Add(standardCount);
 
-            // Folder components
-            var examFolder = $"{baseDateUtc:yyyyMMdd}_{baseDateUtc:HHmmss} {studyDescription}";
-            examFolder = Sanitizer.ForPath(examFolder);
+            // Folder structure
             var orgFolder = Sanitizer.ForPath(organization);
             var patientFolder = Sanitizer.ForPath(patientId);
 
-            // UIDs scoped to the study/series
-            var studyUid = DicomUIDGenerator.GenerateDerivedFromUUID().UID;
+            // Exam folder = date + time only
+            var examFolder = $"{baseDateUtc:yyyyMMdd}_{baseDateUtc:HHmmss}";
+            examFolder = Sanitizer.ForPath(examFolder);
 
-            // Use filename provider (SOPInstanceUID + instanceNumber)
+            var studyUid = DicomUIDGenerator.GenerateDerivedFromUUID().UID;
             var fileNameProvider = new UidAndInstanceFileNameProvider("_", 5);
 
             var written = new List<string>();
 
             for (int s = 0; s < perSeries.Count; s++)
             {
-                // Series description: cycle profile list or fallback
+                // Series description
                 string seriesDesc = (profile.SeriesDescriptions != null && profile.SeriesDescriptions.Count > 0)
                     ? profile.SeriesDescriptions[s % profile.SeriesDescriptions.Count]
                     : $"Series{s + 1}";
 
-                // Folder: "<Modality> <SeriesDescription>"
-                var combinedSeriesFolder = Sanitizer.ForPath($"{modality} {seriesDesc}");
-
-                // Series UID
                 var seriesUid = DicomUIDGenerator.GenerateDerivedFromUUID().UID;
+                var uidSuffix = SafeTail(seriesUid, 6);
+                var baseName = $"{modality} {seriesDesc}";
+                var uniqueTail = $"S{(s + 1):D2}_{uidSuffix}";
+                var combinedSeriesFolder = Sanitizer.ForPath($"{baseName}_{uniqueTail}");
 
-                // Final series directory — note we do NOT use a separate studyDir variable
                 var seriesDir = Path.Combine(
                     outputRoot, "Dicom",
                     orgFolder,
@@ -106,12 +104,12 @@ namespace DicomGeneratorPro
                 );
                 Directory.CreateDirectory(seriesDir);
 
-                // Write instances
                 int frames = perSeries[s];
+                string firstFile = null;
+
                 for (int i = 0; i < frames; i++)
                 {
                     int instanceNumber = i + 1;
-
                     var fullPath = _factory.WriteInstanceToDirectory(
                         seriesDir,
                         fileNameProvider,
@@ -125,18 +123,49 @@ namespace DicomGeneratorPro
                         seriesUid,
                         instanceNumber,
                         rows,
-                        cols);
-
+                        cols,
+                        accessionNumber
+                    );
                     written.Add(fullPath);
+                    if (firstFile == null) firstFile = fullPath;
+                }
 
-                    // Optional progress:
-                    // Console.WriteLine(fullPath);
+                // Just for realism: read AccessionNumber tag (don’t use it in naming)
+                if (s == 0 && File.Exists(firstFile))
+                {
+                    try
+                    {
+                        var file = DicomFile.Open(firstFile);
+                        var accFromTag = file.Dataset.GetSingleValueOrDefault(DicomTag.AccessionNumber, accessionNumber);
+                        Console.WriteLine($"  [Study {modality}] AccessionNumber from metadata: {accFromTag}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"  [WARN] Could not read accession tag: {ex.Message}");
+                    }
                 }
 
                 Console.WriteLine($"Generated {perSeries[s]} DICOM files at: {seriesDir}");
             }
 
-            return new StudyResult(perSeries.Count, written.Count, written);
+            return new StudyResult(modality, perSeries.Count, written.Count, written);
+        }
+
+        /// <summary>
+        /// Returns a safe uppercase tail from a UID for folder suffixing.
+        /// Non-alphanumeric chars replaced with 'X'.
+        /// </summary>
+        private static string SafeTail(string uid, int length)
+        {
+            if (string.IsNullOrWhiteSpace(uid)) return new string('X', length);
+            var s = uid.Length <= length ? uid : uid[^length..];
+            Span<char> buf = stackalloc char[s.Length];
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                buf[i] = char.IsLetterOrDigit(c) ? char.ToUpperInvariant(c) : 'X';
+            }
+            return new string(buf);
         }
     }
 }

@@ -1,4 +1,3 @@
-
 using FellowOakDicom;
 using FellowOakDicom.Imaging;
 using FellowOakDicom.IO.Buffer;
@@ -7,13 +6,18 @@ using System.IO;
 
 namespace DicomGeneratorPro
 {
+    /// <summary>
+    /// Builds and writes synthetic DICOM instances.
+    /// This version accepts an EXAM-level accession number so all studies
+    /// generated for the same exam share the same AccessionNumber tag.
+    /// </summary>
     public sealed class DicomFactory
     {
         private readonly AppConfig _cfg;
         public DicomFactory(AppConfig cfg) { _cfg = cfg; }
 
         /// <summary>
-        /// Original behavior retained: caller provides the final full path.
+        /// Original behavior retained (explicit path), but now requires accessionNumber.
         /// </summary>
         public void WriteInstance(
             string path,
@@ -27,23 +31,27 @@ namespace DicomGeneratorPro
             string seriesUid,
             int instanceNumber,
             int rows,
-            int cols)
+            int cols,
+            string accessionNumber)
         {
+            if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path is required", nameof(path));
+            if (string.IsNullOrWhiteSpace(accessionNumber)) throw new ArgumentException("accessionNumber is required", nameof(accessionNumber));
+
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-            // Build dataset using the original logic (kept verbatim where you asked)
             var ds = CreateDataset(
                 patientId, patientName, modality, studyDescription, studyDateTimeUtc,
                 seriesDescription, studyUid, seriesUid, instanceNumber, rows, cols,
-                out _ // sopInstanceUid not needed for this path-based overload
+                out _,
+                accessionNumber
             );
 
             new DicomFile(ds).Save(path);
         }
 
         /// <summary>
-        /// New overload: caller provides a target directory and a filename provider.
-        /// The filename will be built from the dataset's SOPInstanceUID and InstanceNumber.
+        /// Caller provides a target directory and a filename provider.
+        /// The filename will be built from the dataset's SOPInstanceUID + InstanceNumber.
         /// Returns the full path actually written.
         /// </summary>
         public string WriteInstanceToDirectory(
@@ -59,17 +67,22 @@ namespace DicomGeneratorPro
             string seriesUid,
             int instanceNumber,
             int rows,
-            int cols)
+            int cols,
+            string accessionNumber)
         {
+            if (string.IsNullOrWhiteSpace(directory)) throw new ArgumentException("directory is required", nameof(directory));
+            if (fileNameProvider is null) throw new ArgumentNullException(nameof(fileNameProvider));
+            if (string.IsNullOrWhiteSpace(accessionNumber)) throw new ArgumentException("accessionNumber is required", nameof(accessionNumber));
+
             Directory.CreateDirectory(directory);
 
             var ds = CreateDataset(
                 patientId, patientName, modality, studyDescription, studyDateTimeUtc,
                 seriesDescription, studyUid, seriesUid, instanceNumber, rows, cols,
-                out string sopInstanceUid
+                out string sopInstanceUid,
+                accessionNumber
             );
 
-            // Build filename from the SAME SOPInstanceUID + InstanceNumber written into the dataset
             var fileName = fileNameProvider.BuildFileName(sopInstanceUid, instanceNumber);
             var fullPath = Path.Combine(directory, fileName);
 
@@ -78,8 +91,9 @@ namespace DicomGeneratorPro
         }
 
         /// <summary>
-        /// Centralized dataset construction that preserves your original configuration and
-        /// keeps the geometry, SOP-class mapping, and simple-gradient pixel data exactly as requested.
+        /// Centralized dataset construction that preserves your requested configuration and
+        /// keeps the geometry, SOP-class mapping, and simple-gradient pixel data exactly as requested,
+        /// while injecting the EXAM-level accession number (SH, max 16 chars).
         /// </summary>
         private DicomDataset CreateDataset(
             string patientId,
@@ -93,16 +107,17 @@ namespace DicomGeneratorPro
             int instanceNumber,
             int rows,
             int cols,
-            out string sopInstanceUid)
+            out string sopInstanceUid,
+            string accessionNumber)
         {
             var ds = new DicomDataset(DicomTransferSyntax.ExplicitVRLittleEndian);
 
             ds.Add(DicomTag.PatientID, patientId);
-            ds.Add(DicomTag.PatientName, patientName); // ORG^NNNN
+            ds.Add(DicomTag.PatientName, patientName); // ORG^Initials
             ds.Add(DicomTag.StudyInstanceUID, studyUid);
             ds.Add(DicomTag.SeriesInstanceUID, seriesUid);
 
-            // Generate once; also returned so the filename can use the same value
+            // Generate once; also returned so filename can use the same value
             var sopUid = DicomUIDGenerator.GenerateDerivedFromUUID();
             sopInstanceUid = sopUid.UID;
             ds.Add(DicomTag.SOPInstanceUID, sopInstanceUid);
@@ -113,7 +128,9 @@ namespace DicomGeneratorPro
             ds.Add(DicomTag.InstanceNumber, instanceNumber);
             ds.Add(DicomTag.StudyDate, studyDateTimeUtc.ToString("yyyyMMdd"));
             ds.Add(DicomTag.StudyTime, studyDateTimeUtc.ToString("HHmmss"));
-            ds.Add(DicomTag.AccessionNumber, Math.Abs(patientId.GetHashCode()).ToString());
+
+            // AccessionNumber is VR=SH (max 16 chars); enforce safety.
+            ds.Add(DicomTag.AccessionNumber, TruncateForSH(accessionNumber));
 
             // Image module from config defaults
             ds.Add(DicomTag.SamplesPerPixel, (ushort)1);
@@ -156,6 +173,17 @@ namespace DicomGeneratorPro
             // --- end of your kept block ---
 
             return ds;
+        }
+
+        /// <summary>
+        /// Ensures a string conforms to DICOM SH (Short String) length limit (<=16).
+        /// Trims whitespace and truncates if necessary.
+        /// </summary>
+        private static string TruncateForSH(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            var v = value.Trim();
+            return v.Length <= 16 ? v : v.Substring(0, 16);
         }
     }
 }
